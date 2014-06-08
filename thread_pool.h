@@ -8,7 +8,8 @@
 
 typedef struct thread_pool {
     int pool_size;
-    struct thread threads[2];
+    int job_count;
+    struct thread threads[8];
     bool is_empty;
     struct job *job_queue_first;
     struct job *job_queue_last;
@@ -16,7 +17,7 @@ typedef struct thread_pool {
 
 int init_thread_pool (struct thread_pool *p, int n);
 void process_thread_pool(struct thread_pool *p);
-void thread_pool_queue_task(struct thread_pool *p, void (*f)(void));
+void thread_pool_queue_task(struct thread_pool *p, void (*function)(void *ptr), void *data);
 void stop_thread_pool (struct thread_pool *p);
 
 #endif

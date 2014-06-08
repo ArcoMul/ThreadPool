@@ -3,11 +3,13 @@
 
 #include<stdbool.h>
 
-typedef void (*job_function)(void);
+typedef void (*job_function)(void *data);
 
 typedef struct job {
     bool has_next;
-    job_function f;
+    int id;
+    job_function function;
+    void *data;
     struct job *next;
 } job;
 

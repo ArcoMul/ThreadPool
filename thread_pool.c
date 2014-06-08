@@ -2,14 +2,16 @@
 #include<stdio.h>
 #include<string.h>
 #include<stdlib.h>
+#include "shared.h"
 #include "thread_pool.h"
 
 int init_thread_pool (struct thread_pool *p, int n)
 {
-    printf("Init thread pool, create %d threads\n", n);
+    if (DEBUG) printf("Init thread pool, create %d threads\n", n);
 
     p->is_empty = true;
     p->pool_size = n;
+    p->job_count = 0;
     
     int i = 0;
     int err;
@@ -17,9 +19,9 @@ int init_thread_pool (struct thread_pool *p, int n)
         pthread_t id;
         err = pthread_create(&id, NULL, &thread_run, &(p->threads[i]));
         if (err != 0)
-            printf("Can't create thread :[%s]\n", strerror(err));
+            if (DEBUG) printf("Can't create thread :[%s]\n", strerror(err));
         else
-            printf("Thread created successfully\n");
+            if (DEBUG) printf("Thread created successfully\n");
         i++;
     }
     return 0;
@@ -29,7 +31,25 @@ void process_thread_pool(struct thread_pool *p)
 {
     if (p->is_empty) return;
 
+    job *j = p->job_queue_first;
+    int job_count = 1;
+    while (j->has_next) {
+        j = j->next;
+        job_count++;
+    }
+
+    int thread_count = 0;
     int i = 0;
+    while (i < p->pool_size) {
+        if (!p->threads[i].has_job) {
+            thread_count++;
+        }
+        i++;
+    }
+
+    if (DEBUG) printf("Process %d jobs on %d threads\n", job_count, thread_count);
+
+    i = 0;
     while (i < p->pool_size && !p->is_empty) {
         if (!p->threads[i].has_job) {
             assign_job_to_thread(&(p->threads[i]), p->job_queue_first);
@@ -43,15 +63,17 @@ void process_thread_pool(struct thread_pool *p)
     }
 }
 
-void thread_pool_queue_task(struct thread_pool *p, void (*f)(void))
+void thread_pool_queue_task(struct thread_pool *p, void (*function)(void *data), void *data)
 {
-    printf ("Add job to thread pool\n");
+    if (DEBUG) printf ("Add job %d to thread pool\n", p->job_count);
 
     // Initialize job
     job *j; 
     j = malloc(sizeof(struct job));
     j->has_next = false;
-    j->f = f;
+    j->function = function;
+    j->data = data;
+    j->id = p->job_count++;
 
     if (p->is_empty) {
         p->job_queue_first = j;
