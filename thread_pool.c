@@ -9,14 +9,17 @@ int init_thread_pool (struct thread_pool *p, int n)
 {
     if (DEBUG) printf("Init thread pool, create %d threads\n", n);
 
+    // Start values
     p->is_empty = true;
     p->pool_size = n;
     p->job_count = 0;
     
+    // Create all the threads
     int i = 0;
     int err;
     while (i < p->pool_size) {
         pthread_t id;
+        p->threads[i].has_job = false;
         err = pthread_create(&id, NULL, &thread_run, &(p->threads[i]));
         if (err != 0)
             if (DEBUG) printf("Can't create thread :[%s]\n", strerror(err));
@@ -27,10 +30,14 @@ int init_thread_pool (struct thread_pool *p, int n)
     return 0;
 }
 
-void process_thread_pool(struct thread_pool *p)
+/**
+ * Assigns new jobs to idle threads, drops job which are over their deadline
+ */
+void process_thread_pool(struct thread_pool *p, int current_time)
 {
     if (p->is_empty) return;
 
+    // Count the amount of jobs left
     job *j = p->job_queue_first;
     int job_count = 1;
     while (j->has_next) {
@@ -38,11 +45,18 @@ void process_thread_pool(struct thread_pool *p)
         job_count++;
     }
 
+    // Count the amount of idle threads
     int thread_count = 0;
     int i = 0;
     while (i < p->pool_size) {
         if (!p->threads[i].has_job) {
             thread_count++;
+        } else {
+            if (DEBUG) printf("Hmpf\n");
+            if (p->threads[i].has_job) {
+                if (DEBUG) printf("Has job\n");
+                if (DEBUG) printf("Thread %d has job with name %s\n", p->threads[i].id, p->threads[i].job->name);
+            }
         }
         i++;
     }
@@ -50,20 +64,42 @@ void process_thread_pool(struct thread_pool *p)
     if (DEBUG) printf("Process %d jobs on %d threads\n", job_count, thread_count);
 
     i = 0;
-    while (i < p->pool_size && !p->is_empty) {
-        if (!p->threads[i].has_job) {
-            assign_job_to_thread(&(p->threads[i]), p->job_queue_first);
-            if (p->job_queue_first->has_next) {
-                p->job_queue_first = p->job_queue_first->next;
-            } else {
-                p->is_empty = true;
+    while (i < p->pool_size && !p->is_empty)
+    {
+        // Check if the thread doesn't have a job already
+        if (!p->threads[i].has_job)
+        {
+            // Skip all the jobs which passed their deadline
+            while (!p->is_empty && p->job_queue_first->start_time + p->job_queue_first->deadline > current_time) {
+                thread_pool_next_job(p);
             }
+            
+            // Assign the job to a thread
+            assign_job_to_thread(&(p->threads[i]), p->job_queue_first);
+
+            // Drop the job and advance to the next one
+            thread_pool_next_job(p);
         }
         i++;
     }
 }
 
-void thread_pool_queue_task(struct thread_pool *p, void (*function)(void *data), void *data)
+/**
+ * Advance to the next job in the thread
+ */
+void thread_pool_next_job (struct thread_pool *p)
+{
+    if (p->job_queue_first->has_next) {
+        p->job_queue_first = p->job_queue_first->next;
+    } else {
+        p->is_empty = true;
+    }
+}
+
+/**
+ * Add a new task/job
+ */
+void thread_pool_queue_task(struct thread_pool *p, void (*function)(void *data), void *data, char name[10], int start_time, int deadline)
 {
     if (DEBUG) printf ("Add job %d to thread pool\n", p->job_count);
 
@@ -74,6 +110,9 @@ void thread_pool_queue_task(struct thread_pool *p, void (*function)(void *data),
     j->function = function;
     j->data = data;
     j->id = p->job_count++;
+    j->start_time = start_time;
+    j->deadline = deadline;
+    strcpy(j->name, name);
 
     if (p->is_empty) {
         p->job_queue_first = j;
@@ -86,6 +125,9 @@ void thread_pool_queue_task(struct thread_pool *p, void (*function)(void *data),
     p->job_queue_last = j;
 }
 
+/**
+ * Stop thread pull, set all threads on done
+ */
 void stop_thread_pool (struct thread_pool *p)
 {
     int i = 0;

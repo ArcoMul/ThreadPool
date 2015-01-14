@@ -16,8 +16,9 @@ typedef struct thread_pool {
 } thread_pool;
 
 int init_thread_pool (struct thread_pool *p, int n);
-void process_thread_pool(struct thread_pool *p);
-void thread_pool_queue_task(struct thread_pool *p, void (*function)(void *ptr), void *data);
+void process_thread_pool(struct thread_pool *p, int current_time);
+void thread_pool_queue_task(struct thread_pool *p, void (*function)(void *ptr), void *data, char name[10], int start_time, int deadline);
+void thread_pool_next_job (struct thread_pool *p);
 void stop_thread_pool (struct thread_pool *p);
 
 #endif

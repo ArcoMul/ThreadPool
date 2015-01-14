@@ -11,6 +11,9 @@ typedef struct job {
     job_function function;
     void *data;
     struct job *next;
+    char name[10];
+    int start_time;
+    int deadline;
 } job;
 
 #endif
