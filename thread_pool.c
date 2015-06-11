@@ -52,7 +52,6 @@ void process_thread_pool(struct thread_pool *p, int current_time)
         if (!p->threads[i].has_job) {
             thread_count++;
         } else {
-            if (DEBUG) printf("Hmpf\n");
             if (p->threads[i].has_job) {
                 if (DEBUG) printf("Has job\n");
                 if (DEBUG) printf("Thread %d has job with name %s\n", p->threads[i].id, p->threads[i].job->name);
@@ -70,7 +69,8 @@ void process_thread_pool(struct thread_pool *p, int current_time)
         if (!p->threads[i].has_job)
         {
             // Skip all the jobs which passed their deadline
-            while (!p->is_empty && p->job_queue_first->start_time + p->job_queue_first->deadline > current_time) {
+            while (!p->is_empty && p->job_queue_first->start_time + p->job_queue_first->deadline < current_time) {
+                if (DEBUG) printf("Drop task deadline %d is bigger than %d", p->job_queue_first->deadline, current_time);
                 thread_pool_next_job(p);
             }
             
@@ -89,10 +89,15 @@ void process_thread_pool(struct thread_pool *p, int current_time)
  */
 void thread_pool_next_job (struct thread_pool *p)
 {
-    if (p->job_queue_first->has_next) {
-        p->job_queue_first = p->job_queue_first->next;
+    job *first = p->job_queue_first;
+    if (first == NULL) {
+        printf("No jobs to free\n");  
+    } else if (first->has_next) {
+        p->job_queue_first = first->next;
+        free(first);
     } else {
         p->is_empty = true;
+        free(first);
     }
 }
 
@@ -126,13 +131,23 @@ void thread_pool_queue_task(struct thread_pool *p, void (*function)(void *data),
 }
 
 /**
+ * Check if threadpool is empty
+ */
+bool thread_pool_empty (struct thread_pool *p)
+{
+    return p->is_empty;
+}
+
+/**
  * Stop thread pull, set all threads on done
  */
-void stop_thread_pool (struct thread_pool *p)
+void thread_pool_stop (struct thread_pool *p)
 {
+    if (DEBUG) printf("Stop thread pool\n");
     int i = 0;
     while (i < p->pool_size) {
         p->threads[i].is_done = true;
+        pthread_join((pthread_t) p->threads[i].id, NULL);
         i++;
     }
 }
