@@ -14,11 +14,47 @@ void addition (void* ptr)
     s[2] = s[0] + s[1];
 }
 
-int main ()
+void prime_number (void* ptr)
+{
+    int* input = (int*) ptr;
+    int wanted_prime_n = input[0];
+    int current_n = 3, prime_n, i;
+
+    // Loop through prime numbers
+    for (prime_n = 1; prime_n <= wanted_prime_n; )
+    {
+        // Loop through every number
+        for (i = 2; i <= current_n - 1; i++)
+        {
+            if (current_n % i == 0)
+            break;
+        }
+        // Current number is only dividable by itself
+        if (i == current_n)
+        {
+            if (prime_n == wanted_prime_n)
+                break;
+            prime_n++;
+        }
+        current_n++;
+    }
+
+    // The number we had when we breaked out of the loop
+    // is the number belonging to the n'th prime number
+    // we were looking for
+    input[1] = current_n;
+}
+
+int main (int argc, char *argv[])
 {
     if (DEBUG) printf("Start program\n");
 
-    int thread_count = sysconf( _SC_NPROCESSORS_ONLN ) + 1;
+    int thread_count;
+    if (argc > 1 && isdigit(*argv[1]) && atoi(argv[1]) > 0) {
+        thread_count = atoi(argv[1]);
+    } else {
+        thread_count = sysconf( _SC_NPROCESSORS_ONLN ) + 1;
+    }
 
     if (DEBUG) printf("Create thread pool with %d threads\n", thread_count);
 
@@ -31,14 +67,12 @@ int main ()
     if (DEBUG) printf("Thread pool successfuly created\n");
 
     int n = 1000;
-    int input[n][3];
+    int input[n][2];
     int i;
     for (i = 0; i < n; i++)
     {
-        input[i][0] = i;
-        input[i][1] = i;
-        thread_pool_queue_task(&p, &addition, (void*)&input[i], "addition", 0, 10000); 
-        printf("%d + %d = ?\n", input[i][0], input[i][1]);
+        input[i][0] = i + 1;
+        thread_pool_queue_task(&p, &prime_number, (void*)&input[i], "prime", 0, 10000); 
     }
 
     clock_t start_time, current_time;
@@ -53,7 +87,7 @@ int main ()
 
     for (i = 0; i < n; i++)
     {
-        printf("%d + %d = %d\n", input[i][0], input[i][1], input[i][2]);
+        printf("Prime number %d = %d\n", input[i][0], input[i][1]);
     }
 
     printf("Calculations where done in %f\n", time_since_start);
