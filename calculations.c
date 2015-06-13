@@ -8,22 +8,10 @@
 #include "thread.h"
 #include "thread_pool.h"
 
-pthread_mutex_t counter_mutex;
-
-int counter = 0;
-
-void task1 ()
+void addition (void* ptr)
 {
-    pthread_mutex_lock(&counter_mutex);
-    counter++;
-    pthread_mutex_unlock(&counter_mutex);
-}
-
-void task2 ()
-{
-    pthread_mutex_lock(&counter_mutex);
-    counter++;
-    pthread_mutex_unlock(&counter_mutex);
+    int* s = (int*) ptr;
+    s[2] = s[0] + s[1];
 }
 
 int main ()
@@ -42,25 +30,33 @@ int main ()
 
     if (DEBUG) printf("Thread pool successfuly created\n");
 
-    if (pthread_mutex_init(&counter_mutex, NULL) != 0)
+    int n = 1000;
+    int input[n][3];
+    int i;
+    for (i = 0; i < n; i++)
     {
-        printf("\n mutex init failed\n");
-        return 1;
+        input[i][0] = i;
+        input[i][1] = i;
+        thread_pool_queue_task(&p, &addition, (void*)&input[i], "addition", 0, 10000); 
+        printf("%d + %d = ?\n", input[i][0], input[i][1]);
     }
 
-    int i;
-    for (i = 0; i < 10; i++)
-    {
-        thread_pool_queue_task(&p, &task1, (void*)0, "task1", 0, 10000); 
-        thread_pool_queue_task(&p, &task2, (void*)0, "task2", 0, 10000); 
-    }
+    clock_t start_time, current_time;
+    start_time = current_time = clock();
 
     thread_pool_start(&p);
 
     pthread_join(p.worker_id, NULL);
-    pthread_mutex_destroy(&counter_mutex);
 
-    printf("Final coutner value: %d\n", counter);
+    current_time = clock();
+    float time_since_start = (((float) current_time - (float) start_time) / CLOCKS_PER_SEC);  
+
+    for (i = 0; i < n; i++)
+    {
+        printf("%d + %d = %d\n", input[i][0], input[i][1], input[i][2]);
+    }
+
+    printf("Calculations where done in %f\n", time_since_start);
 
     printf("Finished program\n");
 

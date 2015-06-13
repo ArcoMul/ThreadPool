@@ -66,7 +66,7 @@ void* thread_pool_run (void *ptr)
             running = false;
         }
 
-        nanosleep((struct timespec[]){{0, 100000000}}, NULL);
+        // nanosleep((struct timespec[]){{0, 100000000}}, NULL);
     }
 
     if (DEBUG) printf("Exit worker thread\n");

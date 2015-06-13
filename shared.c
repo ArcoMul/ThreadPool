@@ -1,2 +1,2 @@
 #include "shared.h"
-bool DEBUG = true;
+bool DEBUG = false;
