@@ -5,11 +5,12 @@
 #include "shared.h"
 #include "thread_pool.h"
 
-int init_thread_pool (struct thread_pool *p, int n)
+int thread_pool_init (struct thread_pool *p, int n)
 {
     if (DEBUG) printf("Init thread pool, create %d threads\n", n);
 
     // Start values
+    p->threads = calloc(n, sizeof(struct thread));
     p->is_empty = true;
     p->pool_size = n;
     p->job_count = 0;
@@ -21,19 +22,61 @@ int init_thread_pool (struct thread_pool *p, int n)
         pthread_t id;
         p->threads[i].has_job = false;
         err = pthread_create(&id, NULL, &thread_run, &(p->threads[i]));
-        if (err != 0)
+        if (err != 0) {
             if (DEBUG) printf("Can't create thread :[%s]\n", strerror(err));
-        else
+        } else {
             if (DEBUG) printf("Thread created successfully\n");
+        }
         i++;
     }
     return 0;
 }
 
+void thread_pool_start (struct thread_pool *p)
+{
+    int err = pthread_create(&p->worker_id, NULL, &thread_pool_run, p);
+    if (err != 0) {
+        if (DEBUG) printf("Can't create worker thread :[%s]\n", strerror(err));
+    } else {
+        if (DEBUG) printf("Worker thread created successfully\n");
+    }
+}
+
+void* thread_pool_run (void *ptr)
+{
+    if (DEBUG) printf("Run thread pool\n");
+
+    struct thread_pool *p = (struct thread_pool*) ptr;
+    
+    // Keep track of time while running
+    clock_t start_time, current_time;
+    start_time = current_time = clock();
+
+    bool running = true;
+    while (running)
+    {
+        current_time = clock();
+        float time_since_start = (((float) current_time - (float) start_time) / 1000000.0F ) * 1000;  
+
+        // Process all the threads
+        thread_pool_process(p, time_since_start);
+
+        if (thread_pool_is_empty(p)) {
+            thread_pool_stop(p);
+            running = false;
+        }
+
+        nanosleep((struct timespec[]){{0, 100000000}}, NULL);
+    }
+
+    if (DEBUG) printf("Exit worker thread\n");
+    pthread_exit(NULL);
+}
+
 /**
  * Assigns new jobs to idle threads, drops job which are over their deadline
  */
-void process_thread_pool(struct thread_pool *p, int current_time)
+void thread_pool_process (struct thread_pool *p, int current_time)
 {
     if (p->is_empty) return;
 
@@ -45,24 +88,11 @@ void process_thread_pool(struct thread_pool *p, int current_time)
         job_count++;
     }
 
-    // Count the amount of idle threads
-    int thread_count = 0;
-    int i = 0;
-    while (i < p->pool_size) {
-        if (!p->threads[i].has_job) {
-            thread_count++;
-        } else {
-            if (p->threads[i].has_job) {
-                if (DEBUG) printf("Has job\n");
-                if (DEBUG) printf("Thread %d has job with name %s\n", p->threads[i].id, p->threads[i].job->name);
-            }
-        }
-        i++;
-    }
+    int thread_count = thread_pool_thread_count(p);
 
     if (DEBUG) printf("Process %d jobs on %d threads\n", job_count, thread_count);
 
-    i = 0;
+    int i = 0;
     while (i < p->pool_size && !p->is_empty)
     {
         // Check if the thread doesn't have a job already
@@ -82,6 +112,29 @@ void process_thread_pool(struct thread_pool *p, int current_time)
         }
         i++;
     }
+
+    thread_count = thread_pool_thread_count(p);
+
+    if (DEBUG) printf("After processing %d threads left\n", thread_count);
+}
+
+int thread_pool_thread_count (struct thread_pool *p)
+{
+    // Count the amount of idle threads
+    int thread_count = 0;
+    int i = 0;
+    while (i < p->pool_size) {
+        if (!p->threads[i].has_job) {
+            thread_count++;
+        } else {
+            if (p->threads[i].has_job) {
+                if (DEBUG) printf("Has job\n");
+                if (DEBUG) printf("Thread %d has job with name %s\n", (unsigned int) p->threads[i].id, p->threads[i].job->name);
+            }
+        }
+        i++;
+    }
+    return thread_count;
 }
 
 /**
@@ -133,7 +186,7 @@ void thread_pool_queue_task(struct thread_pool *p, void (*function)(void *data),
 /**
  * Check if threadpool is empty
  */
-bool thread_pool_empty (struct thread_pool *p)
+bool thread_pool_is_empty (struct thread_pool *p)
 {
     return p->is_empty;
 }
@@ -146,8 +199,9 @@ void thread_pool_stop (struct thread_pool *p)
     if (DEBUG) printf("Stop thread pool\n");
     int i = 0;
     while (i < p->pool_size) {
-        p->threads[i].is_done = true;
-        pthread_join((pthread_t) p->threads[i].id, NULL);
+        thread_stop(&p->threads[i]);
+        pthread_join(p->threads[i].id, NULL);
         i++;
     }
+    free(p->threads);
 }
