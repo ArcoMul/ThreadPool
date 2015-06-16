@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <time.h>
+#include <sys/time.h>
 #include <pthread.h>
-#include <time.h>
 #include <unistd.h>
 #include "shared.h"
 #include "job.h"
@@ -12,6 +12,14 @@ void addition (void* ptr)
 {
     int* s = (int*) ptr;
     s[2] = s[0] + s[1];
+}
+
+double get_miliseconds ()
+{
+    struct timeval  tv;
+    gettimeofday(&tv, NULL);
+    double time_in_mill = (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000 ;
+    return time_in_mill;
 }
 
 void prime_number (void* ptr)
@@ -69,28 +77,27 @@ int main (int argc, char *argv[])
     int n = 1000;
     int input[n][2];
     int i;
-    for (i = 0; i < n; i++)
+    for (i = n; i > 0; i--)
     {
-        input[i][0] = i + 1;
-        thread_pool_queue_task(&p, &prime_number, (void*)&input[i], "prime", 0, 10000); 
+        input[i][0] = i;
+        thread_pool_queue_task(&p, &prime_number, (void*)&input[i], "prime", 10000); 
     }
 
-    clock_t start_time, current_time;
-    start_time = current_time = clock();
+    double start_time = get_miliseconds();
 
-    thread_pool_start(&p);
+    thread_pool_start(&p, true);
 
     pthread_join(p.worker_id, NULL);
 
-    current_time = clock();
-    float time_since_start = (((float) current_time - (float) start_time) / CLOCKS_PER_SEC);  
+    double time_since_start = get_miliseconds() - start_time;
 
     for (i = 0; i < n; i++)
     {
         printf("Prime number %d = %d\n", input[i][0], input[i][1]);
     }
 
-    printf("Calculations where done in %f\n", time_since_start);
+    printf("Calculations where done in %f\n", time_since_start / 1000);
+
 
     printf("Finished program\n");
 
