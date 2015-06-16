@@ -61,7 +61,7 @@ int main (int argc, char *argv[])
     if (argc > 1 && isdigit(*argv[1]) && atoi(argv[1]) > 0) {
         thread_count = atoi(argv[1]);
     } else {
-        thread_count = sysconf( _SC_NPROCESSORS_ONLN ) + 1;
+        thread_count = (sysconf( _SC_NPROCESSORS_ONLN ) * 2) + 1;
     }
 
     if (DEBUG) printf("Create thread pool with %d threads\n", thread_count);
